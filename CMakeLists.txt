@@ -14,3 +14,18 @@ add_executable(sol-broker
 )
 
 target_include_directories(sol-broker PRIVATE src)
+
+
+enable_testing()
+
+add_executable(test-mqtt
+    tests/unit/test_mqtt.c
+    src/mqtt.c
+)
+
+target_include_directories(test-mqtt PRIVATE src)
+
+add_test(
+    NAME mqtt-unit-tests
+    COMMAND test-mqtt
+)
