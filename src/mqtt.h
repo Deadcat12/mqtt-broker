@@ -1,162 +1,106 @@
-#ifndef MQTT_H
-#define MQTT_H
+#ifndef SOL_MQTT_H
+#define SOL_MQTT_H
 
-#include <stdio.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-#define MQTT_HEADER_LEN 2
-#define MQTT_ACK_LEN 4
+#define MQTT_MAX_REMAINING_LENGTH 268435455U
+#define MQTT_MAX_PACKET_SIZE (2U * 1024U * 1024U)
 
-#define CONNACK_BYTE 0x20
-#define PUBLISH_BYTE 0x30
-#define PUBACK_BYTE 0x40
-#define PUBREC_BYTE 0x50
-#define PUBREL_BYTE 0x60
-#define PUBCOMP_BYTE 0x70
-#define SUBACK_BYTE 0x90
-#define UNSUBACK_BYTE 0xB0
-#define PINGRESP_BYTE 0xD0
+#define MQTT_CONNECT     1
+#define MQTT_CONNACK     2
+#define MQTT_PUBLISH     3
+#define MQTT_PUBACK      4
+#define MQTT_PUBREC      5
+#define MQTT_PUBREL      6
+#define MQTT_PUBCOMP     7
+#define MQTT_SUBSCRIBE   8
+#define MQTT_SUBACK      9
+#define MQTT_UNSUBSCRIBE 10
+#define MQTT_UNSUBACK    11
+#define MQTT_PINGREQ     12
+#define MQTT_PINGRESP    13
+#define MQTT_DISCONNECT  14
 
-/* Message types */
-enum packet_type {
-    CONNECT = 1,
-    CONNACK = 2,
-    PUBLISH = 3,
-    PUBACK  = 4,
-    PUBREC  = 5, 
-    PUBREL  = 6,
-    PUBCOMP = 7,
-    SUBSCRIBE = 8,
-    SUBACK  = 9,
-    UNSUBSCRIBE = 10,
-    UNSUBACK = 11,
-    PINGREQ = 12,
-    PINGRESP = 13, 
-    DISCONNECT = 14    
-};
+#define MQTT_QOS0 0
+#define MQTT_QOS1 1
+#define MQTT_QOS2 2
 
-enum qos_level { AT_MOST_ONCE, AT_LEAST_ONCE, EXACTLY_ONCE };
+typedef struct {
+    char *topic;
+    uint8_t qos;
+} mqtt_subscription;
 
-union mqtt_header{
-    unsigned char byte;
-    struct {
-        unsigned retain : 1;
-        unsigned qos : 2;
-        unsigned dup : 1;
-        unsigned type : 4;
-    }bits; 
-};
-    
-struct mqtt_connect {
-    union mqtt_header header;
+typedef struct {
+    char *client_id;
+    char *username;
+    char *password;
+    bool has_username;
+    bool has_password;
+    bool clean_session;
+    bool has_will;
+    uint8_t will_qos;
+    bool will_retain;
+    char *will_topic;
+    uint8_t *will_payload;
+    size_t will_payload_len;
+    uint16_t keep_alive;
+} mqtt_connect_packet;
+
+typedef struct {
+    char *topic;
+    uint8_t *payload;
+    size_t payload_len;
+    uint16_t packet_id;
+    uint8_t qos;
+    bool dup;
+    bool retain;
+} mqtt_publish_packet;
+
+typedef struct {
+    uint16_t packet_id;
+    mqtt_subscription *items;
+    size_t count;
+} mqtt_subscribe_packet;
+
+typedef struct {
+    uint16_t packet_id;
+    char **topics;
+    size_t count;
+} mqtt_unsubscribe_packet;
+
+typedef struct {
+    uint16_t packet_id;
+} mqtt_ack_packet;
+
+typedef struct {
+    uint8_t type;
+    uint8_t flags;
     union {
-        unsigned char byte;
-        struct {
-            int reserved : 1;
-            unsigned clean_session : 1;
-            unsigned will : 1;
-            unsigned will_qos : 2;
-            unsigned will_retain : 1;
-            unsigned password : 1;
-            unsigned username : 1;
-        }bits; 
-    };
+        mqtt_connect_packet connect;
+        mqtt_publish_packet publish;
+        mqtt_subscribe_packet subscribe;
+        mqtt_unsubscribe_packet unsubscribe;
+        mqtt_ack_packet ack;
+    } body;
+} mqtt_packet;
 
-    struct {
-        unsigned short keepalive;
-        unsigned char *client_id;
-        unsigned char *username;
-        unsigned char *password;
-        unsigned char *will_topic;
-        unsigned char *will_message;
-    }payload;
+int mqtt_encode_remaining_length(uint8_t *out, size_t len);
+int mqtt_decode_remaining_length(const uint8_t *buf, size_t buflen, size_t *value, size_t *used);
+int mqtt_parse_packet(const uint8_t *buf, size_t len, mqtt_packet *out, char *err, size_t errlen);
+void mqtt_packet_free(mqtt_packet *packet);
 
-};
+uint8_t *mqtt_build_connack(uint8_t session_present, uint8_t return_code, size_t *out_len);
+uint8_t *mqtt_build_suback(uint16_t packet_id, const uint8_t *return_codes, size_t count, size_t *out_len);
+uint8_t *mqtt_build_unsuback(uint16_t packet_id, size_t *out_len);
+uint8_t *mqtt_build_ack(uint8_t type, uint16_t packet_id, size_t *out_len);
+uint8_t *mqtt_build_pingresp(size_t *out_len);
+uint8_t *mqtt_build_publish(const char *topic, const uint8_t *payload, size_t payload_len,
+                            uint8_t qos, bool retain, uint16_t packet_id, size_t *out_len);
 
-struct mqtt_connack {
-    union mqtt_header header;
-    union {
-        unsigned char byte;
-        struct {
-            unsigned session_present : 1;
-            unsigned reserved : 7;
-        }bits;
-    };
-    unsigned char rc;
-};
-
-struct mqtt_subscribe {
-    union mqtt_header header; 
-    unsigned short pkt_id;
-    unsigned short tuples_len;
-    struct {
-        unsigned short topic_len;
-        unsigned char *topic;
-        unsigned qos;
-    } *tuples; 
-};
-
-struct mqtt_unsubscribe {
-    union mqtt_header header; 
-    unsigned short pkt_id;
-    unsigned short tuples_len;
-    struct {
-        unsigned short topic_len;
-        unsigned char *topic;
-        unsigned qos;
-    } *tuples; 
-};
-
-struct mqtt_suback {
-    union mqtt_header header; 
-    unsigned short pkt_id;
-    unsigned short rcslen;
-    unsigned char *rcs;
-};
-
-struct mqtt_publish {
-    union mqtt_header header;
-    unsigned short pkt_id;
-    unsigned short topiclen;
-    unsigned char *topic;
-    unsigned short payloadlen;
-    unsigned char *payload;
-};
-
-struct mqtt_ack {
-    union mqtt_header header;
-    unsigned short pkt_id;
-};
-
-typedef struct mqtt_ack mqtt_puback;
-typedef struct mqtt_ack mqtt_pubrec;
-typedef struct mqtt_ack mqtt_pubrel;
-typedef struct mqtt_ack mqtt_pubcomp;
-typedef struct mqtt_ack mqtt_unsuback;
-typedef union mqtt_header mqtt_pingreq;
-typedef union mqtt_header mqtt_pingresp;
-typedef union mqtt_header mqtt_disconnect;
-
-union mqtt_packet {
-    struct mqtt_ack ack;
-    union mqtt_header header;
-    struct mqtt_connect connect;
-    struct mqtt_connack connack;
-    struct mqtt_suback suback;
-    struct mqtt_publish publish;
-    struct mqtt_subscribe subscribe;
-    struct mqtt_unsubscribe unsubscribe;
-};
-
-int mqtt_encode_length(unsigned char *, size_t);
-unsigned long long mqtt_decode_length(const unsigned char **);
-int unpack_mqtt_packet(const unsigned char *, union mqtt_packet *);
-unsigned char *pack_mqtt_packet(const union mqtt_packet *, unsigned );
-
-union mqtt_header *mqtt_packet_header(unsigned char); 
-struct mqtt_ack_*mqtt_packet_ack(unsigned char , unsigned short);
-struct mqtt_connack *mqtt_packet_connack(unsigned char , unsigned char , unsigned char);
-struct mqtt_suback *mqtt_packet_suback(unsigned char , unsigned short , unsigned char * , unsigned short);
-struct mqtt_publish *mqtt_packet_publish(unsigned char, unsigned short, size_t, unsigned char *, size_t, unsigned char *);
-void mqtt_packet_release(union mqtt_packet *, unsigned);
+bool mqtt_topic_matches(const char *filter, const char *topic);
+bool mqtt_topic_filter_is_valid(const char *filter);
+bool mqtt_topic_name_is_valid(const char *topic);
 
 #endif
