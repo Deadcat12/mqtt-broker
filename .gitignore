@@ -1,0 +1,15 @@
+/build/
+/cmake-build-*/
+sol-broker
+*.o
+*.gcda
+*.gcno
+*.gcov
+compile_commands.json
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+/docs/original/
+/patches/
+*.zip
