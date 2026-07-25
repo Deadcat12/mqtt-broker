@@ -1,6 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
-
+#include <string.h>
 #include "mqtt.h"
 
 
@@ -17,7 +17,6 @@ static void test_exact_topic_match(void)
     ));
 }
 
-
 static void test_single_level_wildcard(void)
 {
     assert(mqtt_topic_matches(
@@ -30,7 +29,6 @@ static void test_single_level_wildcard(void)
         "home/kitchen/humidity"
     ));
 }
-
 
 static void test_multi_level_wildcard(void)
 {
@@ -230,6 +228,43 @@ static void test_remaining_length_round_trip(void)
     }
 }
 
+static void test_topic_name_validation(void)
+{
+    assert(mqtt_topic_name_is_valid("home/kitchen"));
+    assert(mqtt_topic_name_is_valid("sensors/room1/temperature"));
+
+    assert(!mqtt_topic_name_is_valid(""));
+    assert(!mqtt_topic_name_is_valid(NULL));
+
+    assert(!mqtt_topic_name_is_valid("home/+/temperature"));
+    assert(!mqtt_topic_name_is_valid("home/#"));
+}
+
+static void test_topic_filter_validation(void)
+{   
+
+    assert(mqtt_topic_filter_is_valid("home/kitchen"));
+    assert(mqtt_topic_filter_is_valid("home/+/temperature"));
+    assert(mqtt_topic_filter_is_valid("home/#"));
+    assert(mqtt_topic_filter_is_valid("#"));
+    assert(mqtt_topic_filter_is_valid("+"));
+
+    assert(!mqtt_topic_filter_is_valid(""));
+    assert(!mqtt_topic_filter_is_valid(NULL));
+
+    assert(!mqtt_topic_filter_is_valid("home/room+"));
+    assert(!mqtt_topic_filter_is_valid("home/#/temperature"));
+    assert(!mqtt_topic_filter_is_valid("home/test#"));
+
+    //
+
+    assert(mqtt_topic_filter_is_valid("home/kitchen/+"));
+    assert(mqtt_topic_filter_is_valid("+/kitchen/temperature"));
+    assert(!mqtt_topic_filter_is_valid("#/kitchen/+"));
+    assert(mqtt_topic_filter_is_valid("+/kitchen/#"));
+
+}
+
 int main(void)
 {
     test_exact_topic_match();
@@ -239,6 +274,8 @@ int main(void)
     test_remaining_length_decoding();
     test_remaining_length_invalid_input();
     test_remaining_length_round_trip();
+    test_topic_name_validation();
+    test_topic_filter_validation();
 
     puts("All MQTT unit tests passed.");
 
