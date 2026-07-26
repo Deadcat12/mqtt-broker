@@ -1,17 +1,79 @@
-#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include "mqtt.h"
 
+static int checks_run = 0;
+static int checks_failed = 0;
+
+#define CHECK(condition)                                                   \
+    do {                                                                   \
+        ++checks_run;                                                      \
+                                                                           \
+        if (!(condition)) {                                                \
+            ++checks_failed;                                               \
+            fprintf(                                                       \
+                stderr,                                                    \
+                "FAIL: %s:%d: %s\n",                                       \
+                __FILE__,                                                  \
+                __LINE__,                                                  \
+                #condition                                                 \
+            );                                                             \
+        }                                                                  \
+    } while (0)
+
+#define CHECK_EQ_INT(expected, actual)                                  \
+    do {                                                                \
+        int check_expected = (expected);                                \
+        int check_actual = (actual);                                    \
+                                                                        \
+        ++checks_run;                                                   \
+                                                                        \
+        if (check_expected != check_actual) {                           \
+            ++checks_failed;                                            \
+            fprintf(                                                    \
+                stderr,                                                 \
+                "FAIL: %s:%d\n"                                         \
+                "  expected: %d\n"                                      \
+                "  actual:   %d\n",                                     \
+                __FILE__,                                               \
+                __LINE__,                                               \
+                check_expected,                                         \
+                check_actual                                            \
+            );                                                          \
+        }                                                               \
+    } while (0)
+
+
+#define CHECK_EQ_SIZE(expected, actual)                                 \
+    do {                                                               \
+        size_t check_expected = (expected);                            \
+        size_t check_actual = (actual);                                \
+                                                                       \
+        ++checks_run;                                                  \
+                                                                       \
+        if (check_expected != check_actual) {                           \
+            ++checks_failed;                                           \
+            fprintf(                                                   \
+                stderr,                                                \
+                "FAIL: %s:%d\n"                                        \
+                "  expected: %zu\n"                                    \
+                "  actual:   %zu\n",                                   \
+                __FILE__,                                              \
+                __LINE__,                                              \
+                check_expected,                                        \
+                check_actual                                           \
+            );                                                         \
+        }                                                              \
+    } while (0)
 
 static void test_exact_topic_match(void)
 {
-    assert(mqtt_topic_matches(
+    CHECK(mqtt_topic_matches(
         "home/kitchen/temperature",
         "home/kitchen/temperature"
     ));
 
-    assert(!mqtt_topic_matches(
+    CHECK(!mqtt_topic_matches(
         "home/kitchen/temperature",
         "home/kitchen/humidity"
     ));
@@ -19,12 +81,12 @@ static void test_exact_topic_match(void)
 
 static void test_single_level_wildcard(void)
 {
-    assert(mqtt_topic_matches(
+    CHECK(mqtt_topic_matches(
         "home/+/temperature",
         "home/kitchen/temperature"
     ));
 
-    assert(!mqtt_topic_matches(
+    CHECK(!mqtt_topic_matches(
         "home/+/temperature",
         "home/kitchen/humidity"
     ));
@@ -32,12 +94,12 @@ static void test_single_level_wildcard(void)
 
 static void test_multi_level_wildcard(void)
 {
-    assert(mqtt_topic_matches(
+    CHECK(mqtt_topic_matches(
         "sensors/#",
         "sensors/room1/temperature"
     ));
 
-    assert(mqtt_topic_matches(
+    CHECK(mqtt_topic_matches(
         "sensors/#",
         "sensors"
     ));
@@ -48,45 +110,45 @@ static void test_remaining_length_encoding(void)
     uint8_t out[4];
 
     int used = mqtt_encode_remaining_length(out, 0U);
-    assert(used == 1);
-    assert(out[0] == 0x00U);
+    CHECK(used == 1);
+    CHECK(out[0] == 0x00U);
 
     used = mqtt_encode_remaining_length(out, 127U);
-    assert(used == 1);
-    assert(out[0] == 0x7FU);
+    CHECK(used == 1);
+    CHECK(out[0] == 0x7FU);
 
     used = mqtt_encode_remaining_length(out, 128U);
-    assert(used == 2);
-    assert(out[0] == 0x80U);
-    assert(out[1] == 0x01U);
+    CHECK(used == 2);
+    CHECK(out[0] == 0x80U);
+    CHECK(out[1] == 0x01U);
 
     used = mqtt_encode_remaining_length(out, 16383U);
-    assert(used == 2);
-    assert(out[0] == 0xFF);
-    assert(out[1] == 0x7F);
+    CHECK(used == 2);
+    CHECK(out[0] == 0xFF);
+    CHECK(out[1] == 0x7F);
 
     used = mqtt_encode_remaining_length(out, 16384U);
-    assert(used == 3);
-    assert(out[0] == 0x80U);
-    assert(out[1] == 0x80U);
-    assert(out[2] == 0x01U);
+    CHECK(used == 3);
+    CHECK(out[0] == 0x80U);
+    CHECK(out[1] == 0x80U);
+    CHECK(out[2] == 0x01U);
 
     used = mqtt_encode_remaining_length(
         out,
         MQTT_MAX_REMAINING_LENGTH
     );
 
-    assert(used == 4);
-    assert(out[0] == 0xFFU);
-    assert(out[1] == 0xFFU);
-    assert(out[2] == 0xFFU);
-    assert(out[3] == 0x7FU);
-    assert(mqtt_encode_remaining_length(
+    CHECK(used == 4);
+    CHECK(out[0] == 0xFFU);
+    CHECK(out[1] == 0xFFU);
+    CHECK(out[2] == 0xFFU);
+    CHECK(out[3] == 0x7FU);
+    CHECK(mqtt_encode_remaining_length(
         out,
         (size_t)MQTT_MAX_REMAINING_LENGTH + 1U
     ) == -1);
 
-    assert(mqtt_encode_remaining_length(
+    CHECK(mqtt_encode_remaining_length(
         NULL,
         128U
     ) == -1);
@@ -100,53 +162,53 @@ static void test_remaining_length_decoding(void)
 
     const uint8_t one_byte[] = {0x7FU};
 
-    assert(mqtt_decode_remaining_length(
+    CHECK(mqtt_decode_remaining_length(
         one_byte,
         sizeof(one_byte),
         &value,
         &used
     ) == 0);
 
-    assert(value == 127U);
-    assert(used == 1U);
+    CHECK(value == 127U);
+    CHECK(used == 1U);
 
 
     const uint8_t two_bytes[] = {0x80U, 0x01U};
 
-    assert(mqtt_decode_remaining_length(
+    CHECK(mqtt_decode_remaining_length(
         two_bytes,
         sizeof(two_bytes),
         &value,
         &used
     ) == 0);
 
-    assert(value == 128U);
-    assert(used == 2U);
+    CHECK(value == 128U);
+    CHECK(used == 2U);
 
 
     const uint8_t three_bytes[] = {0x80U, 0x80U, 0x01U};
 
-    assert(mqtt_decode_remaining_length(
+    CHECK(mqtt_decode_remaining_length(
         three_bytes,
         sizeof(three_bytes),
         &value,
         &used
     ) == 0);
 
-    assert(value == 16384U);
-    assert(used == 3U);
+    CHECK(value == 16384U);
+    CHECK(used == 3U);
 
     const uint8_t boundary_two_bytes[] = {0xFFU, 0x7FU};
 
-    assert(mqtt_decode_remaining_length(
+    CHECK(mqtt_decode_remaining_length(
         boundary_two_bytes,
         sizeof(boundary_two_bytes),
         &value,
         &used
     ) == 0);
 
-    assert(value == 16383U);
-    assert(used == 2U);
+    CHECK(value == 16383U);
+    CHECK(used == 2U);
 }
 
 static void test_remaining_length_invalid_input(void)
@@ -156,7 +218,7 @@ static void test_remaining_length_invalid_input(void)
 
     const uint8_t truncated[] = {0x80U};
 
-    assert(mqtt_decode_remaining_length(
+    CHECK(mqtt_decode_remaining_length(
         truncated,
         sizeof(truncated),
         &value,
@@ -172,7 +234,7 @@ static void test_remaining_length_invalid_input(void)
         0x00U
     };
 
-    assert(mqtt_decode_remaining_length(
+    CHECK(mqtt_decode_remaining_length(
         too_long,
         sizeof(too_long),
         &value,
@@ -180,7 +242,7 @@ static void test_remaining_length_invalid_input(void)
     ) == -1);
 
 
-    assert(mqtt_decode_remaining_length(
+    CHECK(mqtt_decode_remaining_length(
         NULL,
         0U,
         &value,
@@ -211,57 +273,64 @@ static void test_remaining_length_round_trip(void)
             values[i]
         );
 
-        assert(encoded_size > 0);
+    CHECK(encoded_size > 0);
 
-        size_t decoded = 0U;
-        size_t decoded_size = 0U;
+    size_t decoded = 0U;
+    size_t decoded_size = 0U;
 
-        assert(mqtt_decode_remaining_length(
+    CHECK_EQ_INT(
+        0,
+        mqtt_decode_remaining_length(
             encoded,
             (size_t)encoded_size,
             &decoded,
             &decoded_size
-        ) == 0);
+        )
+    );
 
-        assert(decoded == values[i]);
-        assert(decoded_size == (size_t)encoded_size);
+    CHECK_EQ_SIZE(values[i], decoded);
+
+    CHECK_EQ_SIZE(
+        (size_t)encoded_size,
+        decoded_size
+    );
     }
 }
 
 static void test_topic_name_validation(void)
 {
-    assert(mqtt_topic_name_is_valid("home/kitchen"));
-    assert(mqtt_topic_name_is_valid("sensors/room1/temperature"));
+    CHECK(mqtt_topic_name_is_valid("home/kitchen"));
+    CHECK(mqtt_topic_name_is_valid("sensors/room1/temperature"));
 
-    assert(!mqtt_topic_name_is_valid(""));
-    assert(!mqtt_topic_name_is_valid(NULL));
+    CHECK(!mqtt_topic_name_is_valid(""));
+    CHECK(!mqtt_topic_name_is_valid(NULL));
 
-    assert(!mqtt_topic_name_is_valid("home/+/temperature"));
-    assert(!mqtt_topic_name_is_valid("home/#"));
+    CHECK(!mqtt_topic_name_is_valid("home/+/temperature"));
+    CHECK(!mqtt_topic_name_is_valid("home/#"));
 }
 
 static void test_topic_filter_validation(void)
 {   
 
-    assert(mqtt_topic_filter_is_valid("home/kitchen"));
-    assert(mqtt_topic_filter_is_valid("home/+/temperature"));
-    assert(mqtt_topic_filter_is_valid("home/#"));
-    assert(mqtt_topic_filter_is_valid("#"));
-    assert(mqtt_topic_filter_is_valid("+"));
+    CHECK(mqtt_topic_filter_is_valid("home/kitchen"));
+    CHECK(mqtt_topic_filter_is_valid("home/+/temperature"));
+    CHECK(mqtt_topic_filter_is_valid("home/#"));
+    CHECK(mqtt_topic_filter_is_valid("#"));
+    CHECK(mqtt_topic_filter_is_valid("+"));
 
-    assert(!mqtt_topic_filter_is_valid(""));
-    assert(!mqtt_topic_filter_is_valid(NULL));
+    CHECK(!mqtt_topic_filter_is_valid(""));
+    CHECK(!mqtt_topic_filter_is_valid(NULL));
 
-    assert(!mqtt_topic_filter_is_valid("home/room+"));
-    assert(!mqtt_topic_filter_is_valid("home/#/temperature"));
-    assert(!mqtt_topic_filter_is_valid("home/test#"));
+    CHECK(!mqtt_topic_filter_is_valid("home/room+"));
+    CHECK(!mqtt_topic_filter_is_valid("home/#/temperature"));
+    CHECK(!mqtt_topic_filter_is_valid("home/test#"));
 
     //
 
-    assert(mqtt_topic_filter_is_valid("home/kitchen/+"));
-    assert(mqtt_topic_filter_is_valid("+/kitchen/temperature"));
-    assert(!mqtt_topic_filter_is_valid("#/kitchen/+"));
-    assert(mqtt_topic_filter_is_valid("+/kitchen/#"));
+    CHECK(mqtt_topic_filter_is_valid("home/kitchen/+"));
+    CHECK(mqtt_topic_filter_is_valid("+/kitchen/temperature"));
+    CHECK(!mqtt_topic_filter_is_valid("#/kitchen/+"));
+    CHECK(mqtt_topic_filter_is_valid("+/kitchen/#"));
 
 }
 
@@ -277,7 +346,21 @@ int main(void)
     test_topic_name_validation();
     test_topic_filter_validation();
 
-    puts("All MQTT unit tests passed.");
+    if (checks_failed != 0) {
+        fprintf(
+            stderr,
+            "%d of %d MQTT checks failed.\n",
+            checks_failed,
+            checks_run
+        );
+
+        return 1;
+    }
+
+    printf(
+        "All %d MQTT checks passed.\n",
+        checks_run
+    );
 
     return 0;
 }
