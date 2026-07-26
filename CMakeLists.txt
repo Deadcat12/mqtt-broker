@@ -31,6 +31,14 @@ add_executable(test-mqtt
 target_include_directories(test-mqtt PRIVATE src)
 
 if(ENABLE_SANITIZERS)
+
+    if(WIN32)
+        message(
+            FATAL_ERROR
+            "ENABLE_SANITIZERS is supported in this project on Linux with GCC/Clang"
+        )
+    endif()
+    
     target_compile_options(
         test-mqtt
         PRIVATE
