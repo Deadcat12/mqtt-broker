@@ -556,10 +556,12 @@ int broker_start(const char *host, const char *port) {
             if (fd >= 0) {
                 set_recv_timeout(fd);
                 client *c = client_create(fd);
-                if (!c || add_client(&state, c) != 0) {
+                if (!c) {
+                    fprintf(stderr, "failed to create client; closing accepted socket\n");
+                    close(fd);
+                } else if (add_client(&state, c) != 0) {
                     fprintf(stderr, "too many clients; closing accepted socket\n");
                     client_destroy(c);
-                    close(fd);
                 }
             }
         }
