@@ -9,7 +9,7 @@ import time
 HOST = '127.0.0.1'
 PORT = 18883
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BROKER = os.path.join(ROOT, 'sol-broker')
+BROKER = os.environ.get("SOL_BROKER", os.path.join(ROOT, 'sol-broker'))
 
 
 def enc_len(n: int) -> bytes:

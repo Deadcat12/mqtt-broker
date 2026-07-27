@@ -52,3 +52,32 @@ jobs:
 
       - name: Run sanitizer tests
         run: ctest --test-dir build-sanitizers --output-on-failure
+
+  broker-regression:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Configure broker build
+        run: >
+          cmake
+          -S .
+          -B build-broker
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER=gcc
+
+      - name: Build broker
+        run: cmake --build build-broker --target sol-broker
+
+      - name: Run integration test
+        env:
+          SOL_BROKER: ${{ github.workspace }}/build-broker/sol-broker
+        run: python3 -S tests/integration_test.py
+
+      - name: Run defense regression tests
+        env:
+          SOL_BROKER: ${{ github.workspace }}/build-broker/sol-broker
+        run: python3 -S tests/defense_demo_test.py
+
