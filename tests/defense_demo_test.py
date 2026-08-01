@@ -222,12 +222,66 @@ def test_qos1_and_qos2():
     close_client(sub)
     close_client(pub)
 
+def test_retain_flag_semantics():
+    sub = connect_client("defense-retain-sub")
+    pub = connect_client("defense-retain-pub")
+
+    sub.sendall(subscribe_packet(7, "demo/retain", 0))
+    assert read_packet(sub) == b"\x90\x03\x00\x07\x00"
+
+    pub.sendall(
+        publish_packet(
+            "demo/retain",
+            "stored-value",
+            retain=True
+        )
+    )
+
+    topic, payload, qos, retain, packet_id = parse_publish(
+        read_packet(sub)
+    )
+
+    assert topic == "demo/retain"
+    assert payload == b"stored-value"
+    assert retain is False, (
+        "RETAIN must be 0 when forwarding to an existing subscription"
+    )
+
+    close_client(sub)
+
+    late_sub = connect_client("defense-retain-late")
+
+    late_sub.sendall(
+        subscribe_packet(
+            8,
+            "demo/retain",
+            0
+        )
+    )
+
+    assert read_packet(late_sub) == b"\x90\x03\x00\x08\x00"
+
+    topic, payload, qos, retain, packet_id = parse_publish(
+        read_packet(late_sub)
+    )
+
+    assert topic == "demo/retain"
+    assert payload == b"stored-value"
+    assert retain is True, (
+        "RETAIN must be 1 when delivering a stored retained message "
+        "after a new subscription"
+    )
+
+    close_client(late_sub)
+    close_client(pub)
+
 TESTS = [
     ("CONNECT / CONNACK / PINGREQ / PINGRESP / DISCONNECT", test_connect_ping_disconnect),
     ("SUBSCRIBE / SUBACK / PUBLISH QoS0", test_subscribe_publish_qos0),
     ("Wildcard topics + and #", test_wildcards_plus_and_hash),
     ("UNSUBSCRIBE / UNSUBACK stops delivery", test_unsubscribe),
     ("QoS1 PUBACK and QoS2 PUBREC-PUBREL-PUBCOMP", test_qos1_and_qos2),
+    ("RETAIN flag semantics", test_retain_flag_semantics),
 ]
 
 def main():
