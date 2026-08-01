@@ -382,7 +382,7 @@ static void publish_forward(broker_state *state, const mqtt_publish_packet *pub)
         }
         size_t out_len = 0U;
         uint16_t pid = qos > 0U ? next_packet_id(target) : 0U;
-        uint8_t *out = mqtt_build_publish(pub->topic, pub->payload, pub->payload_len, qos, pub->retain, pid, &out_len);
+        uint8_t *out = mqtt_build_publish(pub->topic, pub->payload, pub->payload_len, qos, false, pid, &out_len);
         if (send_packet(target, out, out_len) != 0) {
             fprintf(stderr, "warning: failed to forward PUBLISH to %s\n", target->client_id ? target->client_id : "<unknown>");
         }
