@@ -271,10 +271,6 @@ static int parse_publish(const uint8_t *payload, size_t payload_len, mqtt_packet
 static int parse_subscribe(const uint8_t *payload, size_t payload_len, mqtt_packet *out, char *err, size_t errlen) {
     const uint8_t *p = payload;
     const uint8_t *end = payload + payload_len;
-    if ((out->flags & 0x0FU) != 0x02U) {
-        snprintf(err, errlen, "SUBSCRIBE: invalid fixed header flags");
-        return -1;
-    }
     if ((size_t)(end - p) < 2U) {
         snprintf(err, errlen, "SUBSCRIBE: missing packet id");
         return -1;
@@ -326,10 +322,6 @@ static int parse_subscribe(const uint8_t *payload, size_t payload_len, mqtt_pack
 static int parse_unsubscribe(const uint8_t *payload, size_t payload_len, mqtt_packet *out, char *err, size_t errlen) {
     const uint8_t *p = payload;
     const uint8_t *end = payload + payload_len;
-    if ((out->flags & 0x0FU) != 0x02U) {
-        snprintf(err, errlen, "UNSUBSCRIBE: invalid fixed header flags");
-        return -1;
-    }
     if ((size_t)(end - p) < 2U) {
         snprintf(err, errlen, "UNSUBSCRIBE: missing packet id");
         return -1;
@@ -384,6 +376,33 @@ static int parse_ack(const uint8_t *payload, size_t payload_len, mqtt_packet *ou
     return 0;
 }
 
+static bool mqtt_fixed_header_flags_are_valid(
+    uint8_t type,
+    uint8_t flags
+)
+{
+    switch (type) {
+        case MQTT_CONNECT:
+        case MQTT_PUBACK:
+        case MQTT_PUBREC:
+        case MQTT_PUBCOMP:
+        case MQTT_PINGREQ:
+        case MQTT_DISCONNECT:
+            return flags == 0x00U;
+
+        case MQTT_PUBREL:
+        case MQTT_SUBSCRIBE:
+        case MQTT_UNSUBSCRIBE:
+            return flags == 0x02U;
+
+        case MQTT_PUBLISH:
+            return true;
+
+        default:
+            return true;
+    }
+}
+
 int mqtt_parse_packet(const uint8_t *buf, size_t len, mqtt_packet *out, char *err, size_t errlen) {
     if (!buf || !out || len < 2U) {
         snprintf(err, errlen, "packet is too short");
@@ -392,6 +411,20 @@ int mqtt_parse_packet(const uint8_t *buf, size_t len, mqtt_packet *out, char *er
     memset(out, 0, sizeof(*out));
     out->type = (uint8_t)(buf[0] >> 4U);
     out->flags = (uint8_t)(buf[0] & 0x0FU);
+        if (!mqtt_fixed_header_flags_are_valid(
+            out->type,
+            out->flags
+        )) {
+        snprintf(
+            err,
+            errlen,
+            "packet type %u has invalid fixed header flags 0x%X",
+            out->type,
+            out->flags
+        );
+
+        return -1;
+    }
     size_t remaining = 0U;
     size_t used = 0U;
     if (mqtt_decode_remaining_length(buf + 1U, len - 1U, &remaining, &used) != 0) {
@@ -405,10 +438,6 @@ int mqtt_parse_packet(const uint8_t *buf, size_t len, mqtt_packet *out, char *er
     const uint8_t *payload = buf + 1U + used;
     switch (out->type) {
         case MQTT_CONNECT:
-            if (out->flags != 0U) {
-                snprintf(err, errlen, "CONNECT: invalid flags");
-                return -1;
-            }
             return parse_connect(payload, remaining, out, err, errlen);
         case MQTT_PUBLISH:
             return parse_publish(payload, remaining, out, err, errlen);

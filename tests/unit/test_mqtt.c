@@ -430,7 +430,29 @@ static void test_topic_filter_validation(void)
 
 }
 
+static void test_reject_pingreq_with_invalid_flags(void)
+{
+    const uint8_t packet[] = {
+        0xC1U,
+        0x00U
+    };
 
+    mqtt_packet parsed;
+    char err[128] = {0};
+
+    CHECK_EQ_INT(
+        -1,
+        mqtt_parse_packet(
+            packet,
+            sizeof(packet),
+            &parsed,
+            err,
+            sizeof(err)
+        )
+    );
+
+    CHECK(strlen(err) > 0U);
+}
 
 int main(void)
 {
@@ -445,6 +467,9 @@ int main(void)
     test_topic_filter_validation();
     test_publish_build_parse_round_trip();
     test_reject_truncated_packet();
+    test_reject_pingreq_with_invalid_flags();
+
+
 
     if (checks_failed != 0) {
         fprintf(
