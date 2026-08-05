@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "mqtt.h"
+#include <stdlib.h>
 
 static int checks_run = 0;
 static int checks_failed = 0;
@@ -77,6 +78,101 @@ static void test_exact_topic_match(void)
         "home/kitchen/temperature",
         "home/kitchen/humidity"
     ));
+}
+
+static void test_reject_truncated_packet(void)
+{
+    const uint8_t packet[] = {
+        0x30U,
+        0x05U,
+        0x00U
+    };
+
+    mqtt_packet parsed;
+    char err[128] = {0};
+
+    CHECK_EQ_INT(
+        -1,
+        mqtt_parse_packet(
+            packet,
+            sizeof(packet),
+            &parsed,
+            err,
+            sizeof(err)
+        )
+    );
+
+    CHECK(strlen(err) > 0U);
+}
+
+static void test_publish_build_parse_round_trip(void)
+{
+    const char *topic = "sensors/room1/temperature";
+    const uint8_t payload[] = "24.5";
+
+    size_t encoded_len = 0U;
+
+    uint8_t *encoded = mqtt_build_publish(
+        topic,
+        payload,
+        sizeof(payload) - 1U,
+        MQTT_QOS1,
+        true,
+        42U,
+        &encoded_len
+    );
+
+    CHECK(encoded != NULL);
+    CHECK(encoded_len > 0U);
+
+    if (!encoded) {
+        return;
+    }
+
+    mqtt_packet packet;
+    char err[128] = {0};
+
+    CHECK_EQ_INT(
+        0,
+        mqtt_parse_packet(
+            encoded,
+            encoded_len,
+            &packet,
+            err,
+            sizeof(err)
+        )
+    );
+
+    CHECK_EQ_INT(MQTT_PUBLISH, packet.type);
+    CHECK_EQ_INT(MQTT_QOS1, packet.body.publish.qos);
+
+    CHECK(packet.body.publish.retain);
+    CHECK(!packet.body.publish.dup);
+
+    CHECK_EQ_INT(42, packet.body.publish.packet_id);
+
+    CHECK(
+        strcmp(
+            topic,
+            packet.body.publish.topic
+        ) == 0
+    );
+
+    CHECK_EQ_SIZE(
+        sizeof(payload) - 1U,
+        packet.body.publish.payload_len
+    );
+
+    CHECK(
+        memcmp(
+            payload,
+            packet.body.publish.payload,
+            sizeof(payload) - 1U
+        ) == 0
+    );
+
+    mqtt_packet_free(&packet);
+    free(encoded);
 }
 
 static void test_single_level_wildcard(void)
@@ -334,6 +430,8 @@ static void test_topic_filter_validation(void)
 
 }
 
+
+
 int main(void)
 {
     test_exact_topic_match();
@@ -345,6 +443,8 @@ int main(void)
     test_remaining_length_round_trip();
     test_topic_name_validation();
     test_topic_filter_validation();
+    test_publish_build_parse_round_trip();
+    test_reject_truncated_packet();
 
     if (checks_failed != 0) {
         fprintf(
