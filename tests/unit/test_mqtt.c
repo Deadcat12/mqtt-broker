@@ -454,6 +454,62 @@ static void test_reject_pingreq_with_invalid_flags(void)
     CHECK(strlen(err) > 0U);
 }
 
+static void test_accept_pubrel_with_required_flags(void)
+{
+    const uint8_t packet[] = {
+        0x62U,
+        0x02U,
+        0x00U,
+        0x2AU
+    };
+
+    mqtt_packet parsed;
+    char err[128] = {0};
+
+    CHECK_EQ_INT(
+        0,
+        mqtt_parse_packet(
+            packet,
+            sizeof(packet),
+            &parsed,
+            err,
+            sizeof(err)
+        )
+    );
+
+    CHECK_EQ_INT(MQTT_PUBREL, parsed.type);
+
+    mqtt_packet_free(&parsed);
+}
+
+static void test_reject_pubrel_with_invalid_flags(void)
+{
+    const uint8_t packet[] = {
+        0x60U,
+        0x02U,
+        0x00U,
+        0x2AU
+    };
+
+    mqtt_packet parsed;
+    char err[128] = {0};
+
+    CHECK_EQ_INT(
+        -1,
+        mqtt_parse_packet(
+            packet,
+            sizeof(packet),
+            &parsed,
+            err,
+            sizeof(err)
+        )
+    );
+
+    CHECK(strlen(err) > 0U);
+}
+
+
+
 int main(void)
 {
     test_exact_topic_match();
@@ -468,7 +524,8 @@ int main(void)
     test_publish_build_parse_round_trip();
     test_reject_truncated_packet();
     test_reject_pingreq_with_invalid_flags();
-
+    test_accept_pubrel_with_required_flags();
+    test_reject_pubrel_with_invalid_flags();
 
 
     if (checks_failed != 0) {
