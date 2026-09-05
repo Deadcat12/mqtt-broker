@@ -25,6 +25,14 @@ add_executable(sol-broker
 
 target_include_directories(sol-broker PRIVATE src)
 
+add_executable(test-mqtt-cpp
+    tests/cpp/test_mqtt_types.cpp
+)
+
+target_include_directories(test-mqtt-cpp
+    PRIVATE
+    src/cpp
+)
 
 enable_testing()
 
@@ -61,4 +69,9 @@ endif()
 add_test(
     NAME mqtt-unit-tests
     COMMAND test-mqtt
+)
+
+add_test(
+    NAME mqtt-cpp-type-tests
+    COMMAND test-mqtt-cpp
 )
